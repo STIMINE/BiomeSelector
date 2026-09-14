@@ -1,0 +1,11 @@
+[
+  {
+    "modid": "biomeselector",
+    "name": "Biome Selector",
+    "description": "Select an X/Z area and change its biome with the Biome Wand.",
+    "version": "${version}",
+    "mcversion": "1.7.10",
+    "authorList": ["STI MINECRAFT"],
+    "credits": "Built for Forge 10.13.4.1614"
+  }
+]
