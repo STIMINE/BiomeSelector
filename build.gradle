@@ -1,0 +1,74 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { name = "forge"; url = "https://files.minecraftforge.net/maven" }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:1.2-SNAPSHOT'
+    }
+}
+
+apply plugin: 'forge'
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+version = '1.3.0'
+group = 'jp.sohta.biomeselector'
+archivesBaseName = 'BiomeSelector'
+
+minecraft {
+    version = '1.7.10-10.13.4.1614-1.7.10'
+    runDir = 'eclipse'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version
+    }
+    from(sourceSets.main.resources.srcDirs) { exclude 'mcmod.info' }
+}
+
+// ForgeGradle 1.2 still points at Mojang's retired Minecraft.Download S3 URLs.
+// Seed its expected cache from the current official version manifest instead.
+import groovy.json.JsonSlurper
+
+task seedLegacyMinecraft {
+    doLast {
+        def cache = new File(projectDir, 'work/.gradle-user-home/caches/minecraft')
+        def parser = new JsonSlurper()
+        def readJson = { String address -> parser.parse(new URL(address)) }
+        def writeUrl = { String address, File destination ->
+            destination.parentFile.mkdirs()
+            new URL(address).withInputStream { input ->
+                destination.withOutputStream { output ->
+                    byte[] buffer = new byte[8192]
+                    int count
+                    while ((count = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            println "Seeded ${destination.absolutePath} (${destination.length()} bytes)"
+        }
+        def manifest = readJson('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
+        def entry = manifest.versions.find { it.id == '1.7.10' }
+        if (entry == null) throw new GradleException('Minecraft 1.7.10 was not found in Mojang version metadata.')
+        def versionData = readJson(entry.url as String)
+
+        writeUrl(versionData.downloads.client.url as String,
+                new File(cache, 'net/minecraft/minecraft/1.7.10/minecraft-1.7.10.jar'))
+        writeUrl(versionData.downloads.server.url as String,
+                new File(cache, 'net/minecraft/minecraft_server/1.7.10/minecraft_server-1.7.10.jar'))
+        writeUrl(entry.url as String, new File(cache, 'versionJsons/1.7.10.json'))
+        writeUrl(versionData.assetIndex.url as String, new File(cache, 'assets/indexes/1.7.10.json'))
+    }
+}
+
+tasks.matching { it.name in ['downloadClient', 'downloadServer', 'getVersionJson', 'getAssetsIndex'] }.all {
+    dependsOn seedLegacyMinecraft
+    enabled = false
+}
